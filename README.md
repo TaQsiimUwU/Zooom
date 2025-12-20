@@ -1,10 +1,10 @@
-**Project Zooom**
+###**Project Zooom**
 
 Abdallah Kassem Hassan 320230213  
 Hesham Mahmoud Abdelsalam 320320118  
 Mohamed Tamer Mohamed 320230078
 
-**Game description:**  
+##**Game description:**  
 Genre: 3D Third-Person Speed-running Game.
 
 Core Objective: The Player must navigate a series of handcrafted 3D levels from a designated starting point to the goal marker/end point in the shortest time possible. The game challenges the player’s mastery of movement mechanics and level knowledge. 
