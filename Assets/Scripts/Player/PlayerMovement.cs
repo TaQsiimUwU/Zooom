@@ -3,19 +3,20 @@ using UnityEngine;
 
 public class PlayerMovement : MonoBehaviour {
 
-    //Assingables
+    // Assingables
     public Transform playerCam;
     public Transform orientation;
     
-    //Other
+    // Other
     private Rigidbody rb;
 
-    //Rotation and look
+    // Rotation and look
     private float xRotation;
     private float sensitivity = 50f;
     private float sensMultiplier = 1f;
     
-    //Movement
+    // Movement
+    [Header("Movement")]
     public float moveSpeed = 4500;
     public float maxSpeed = 20;
     public bool grounded;
@@ -25,24 +26,37 @@ public class PlayerMovement : MonoBehaviour {
     private float threshold = 0.01f;
     public float maxSlopeAngle = 35f;
 
-    //Crouch & Slide
+    // Wallrunning
+    [Header("Wallrunning")]
+    public LayerMask whatIsWallrunnable; 
+    public float minWallNormalAngle = 70f; // Slope threshold to be considered a wall
+    public float wallrunForce = 3000f;
+    public float walljumpSideForce = 600f; 
+    public float walljumpForwardForce = 600f; 
+    public float wallClimbSpeed = 1.5f; 
+    public float maxWallRunCameraTilt = 15f;
+    private float wallRunCameraTilt;
+    private bool isWallRunning;
+    private Vector3 wallNormal;
+    private Vector3 lastWallNormal; 
+
+    // Crouch & Slide
     private Vector3 crouchScale = new Vector3(1, 0.5f, 1);
     private Vector3 playerScale;
     public float slideForce = 400;
     public float slideCounterMovement = 0.2f;
 
-    //Jumping
+    // Jumping
+    [Header("Jumping")]
     private bool readyToJump = true;
     private float jumpCooldown = 0.25f;
     public float jumpForce = 550f;
     
-    //Input
+    // Input
     float x, y;
     bool jumping, sprinting, crouching;
     
-    //Sliding
     private Vector3 normalVector = Vector3.up;
-    private Vector3 wallNormalVector;
 
     void Awake() {
         rb = GetComponent<Rigidbody>();
@@ -54,7 +68,6 @@ public class PlayerMovement : MonoBehaviour {
         Cursor.visible = false;
     }
 
-    
     private void FixedUpdate() {
         Movement();
     }
@@ -62,16 +75,15 @@ public class PlayerMovement : MonoBehaviour {
     private void Update() {
         MyInput();
         Look();
+        CheckWall();
     }
 
-    // should probably be in a separate class but icba
     private void MyInput() {
         x = Input.GetAxisRaw("Horizontal");
         y = Input.GetAxisRaw("Vertical");
         jumping = Input.GetButton("Jump");
         crouching = Input.GetKey(KeyCode.LeftControl);
       
-        //Crouching
         if (Input.GetKeyDown(KeyCode.LeftControl))
             StartCrouch();
         if (Input.GetKeyUp(KeyCode.LeftControl))
@@ -81,11 +93,6 @@ public class PlayerMovement : MonoBehaviour {
     private void StartCrouch() {
         transform.localScale = crouchScale;
         transform.position = new Vector3(transform.position.x, transform.position.y - 0.5f, transform.position.z);
-        if (rb.linearVelocity.magnitude > 0.5f) {
-            if (grounded) {
-                rb.AddForce(orientation.transform.forward * slideForce);
-            }
-        }
     }
 
     private void StopCrouch() {
@@ -94,61 +101,72 @@ public class PlayerMovement : MonoBehaviour {
     }
 
     private void Movement() {
-        //Extra gravity
-        //collision won't work too well w/o this (i think)
-        rb.AddForce(Vector3.down * Time.deltaTime * 10);
-        
-        //Find actual velocity relative to where player is looking
+        if (isWallRunning) {
+            rb.useGravity = false;
+            // Constant glide descent
+            rb.linearVelocity = new Vector3(rb.linearVelocity.x, -wallClimbSpeed, rb.linearVelocity.z);
+            WallRunMovement();
+        } else {
+            rb.useGravity = true;
+            rb.AddForce(Vector3.down * Time.deltaTime * 10f);
+        }
+
         Vector2 mag = FindVelRelativeToLook();
         float xMag = mag.x, yMag = mag.y;
 
-        //Counteract sliding and sloppy movement 
         CounterMovement(x, y, mag);
         
-        //If holding jump && ready to jump, then jump
         if (readyToJump && jumping) Jump();
 
-        //Set max speed
-        float maxSpeed = this.maxSpeed;
+        float maxS = maxSpeed;
         
-        //If sliding down a ramp, add force down so player stays grounded and also builds speed
         if (crouching && grounded && readyToJump) {
             rb.AddForce(Vector3.down * Time.deltaTime * 3000);
             return;
         }
-        
-        //If speed is larger than maxspeed, cancel out the input so you don't go over max speed
-        if (x > 0 && xMag > maxSpeed) x = 0;
-        if (x < 0 && xMag < -maxSpeed) x = 0;
-        if (y > 0 && yMag > maxSpeed) y = 0;
-        if (y < 0 && yMag < -maxSpeed) y = 0;
 
-        //Some multipliers
+        if (x > 0 && xMag > maxS) x = 0;
+        if (x < 0 && xMag < -maxS) x = 0;
+        if (y > 0 && yMag > maxS) y = 0;
+        if (y < 0 && yMag < -maxS) y = 0;
+
         float multiplier = 1f, multiplierV = 1f;
         
-        // Movement in air
         if (!grounded) {
             multiplier = 0.5f;
             multiplierV = 0.5f;
         }
-        
-        // Movement while sliding
+
         if (grounded && crouching) multiplierV = 0f;
 
-        //Apply forces to move player
-        rb.AddForce(orientation.transform.forward * y * moveSpeed * Time.deltaTime * multiplier * multiplierV);
-        rb.AddForce(orientation.transform.right * x * moveSpeed * Time.deltaTime * multiplier);
+        if (!isWallRunning) {
+            rb.AddForce(orientation.transform.forward * y * moveSpeed * Time.deltaTime * multiplier * multiplierV);
+            rb.AddForce(orientation.transform.right * x * moveSpeed * Time.deltaTime * multiplier);
+        }
+    }
+
+    private void WallRunMovement() {
+        // Player must hold W to move forward
+        if (y > 0) {
+            Vector3 wallForward = Vector3.Cross(wallNormal, Vector3.up);
+
+            if ((orientation.forward - wallForward).magnitude > (orientation.forward - -wallForward).magnitude)
+                wallForward = -wallForward;
+
+            rb.AddForce(wallForward * wallrunForce * Time.deltaTime);
+        }
+
+        // Apply sticky force
+        rb.AddForce(-wallNormal * 100 * Time.deltaTime);
     }
 
     private void Jump() {
         if (grounded && readyToJump) {
             readyToJump = false;
 
-            //Add jump forces
             rb.AddForce(Vector2.up * jumpForce * 1.5f);
             rb.AddForce(normalVector * jumpForce * 0.5f);
             
-            //If jumping while falling, reset y velocity.
             Vector3 vel = rb.linearVelocity;
             if (rb.linearVelocity.y < 0.5f)
                 rb.linearVelocity = new Vector3(vel.x, 0, vel.z);
@@ -157,48 +175,100 @@ public class PlayerMovement : MonoBehaviour {
             
             Invoke(nameof(ResetJump), jumpCooldown);
         }
+
+        if (isWallRunning && readyToJump) {
+            readyToJump = false;
+            
+            // Kill wallrun state immediately so physics doesn't fight the jump
+            isWallRunning = false;
+            lastWallNormal = wallNormal; 
+
+            // Clear current downward glide velocity
+            rb.linearVelocity = new Vector3(rb.linearVelocity.x, 0, rb.linearVelocity.z);
+
+            // 1. Vertical: 1.5x the normal grounded jump
+            rb.AddForce(Vector3.up * (jumpForce * 2.25f));
+
+            // 2. Side: Kick away from the wall
+            rb.AddForce(wallNormal * walljumpSideForce);
+
+            // 3. Forward: Speed burst in the look direction
+            rb.AddForce(orientation.forward * walljumpForwardForce);
+
+            Invoke(nameof(ResetJump), jumpCooldown);
+        }
     }
     
     private void ResetJump() {
         readyToJump = true;
     }
-    
-    private float desiredX;
+
     private void Look() {
         float mouseX = Input.GetAxis("Mouse X") * sensitivity * Time.fixedDeltaTime * sensMultiplier;
         float mouseY = Input.GetAxis("Mouse Y") * sensitivity * Time.fixedDeltaTime * sensMultiplier;
 
-        //Find current look rotation
         Vector3 rot = playerCam.transform.localRotation.eulerAngles;
-        desiredX = rot.y + mouseX;
+        float desiredX = rot.y + mouseX;
         
-        //Rotate, and also make sure we dont over- or under-rotate.
         xRotation -= mouseY;
         xRotation = Mathf.Clamp(xRotation, -90f, 90f);
 
-        //Perform the rotations
-        playerCam.transform.localRotation = Quaternion.Euler(xRotation, desiredX, 0);
+        if (isWallRunning) {
+            float tiltTarget = 0;
+            if (Physics.Raycast(transform.position, orientation.right, 1.5f, whatIsWallrunnable)) {
+                tiltTarget = maxWallRunCameraTilt; 
+            } else if (Physics.Raycast(transform.position, -orientation.right, 1.5f, whatIsWallrunnable)) {
+                tiltTarget = -maxWallRunCameraTilt;
+            }
+            wallRunCameraTilt = Mathf.Lerp(wallRunCameraTilt, tiltTarget, Time.deltaTime * 5f);
+        } else {
+            wallRunCameraTilt = Mathf.Lerp(wallRunCameraTilt, 0, Time.deltaTime * 5f);
+        }
+
+        playerCam.transform.localRotation = Quaternion.Euler(xRotation, desiredX, wallRunCameraTilt);
         orientation.transform.localRotation = Quaternion.Euler(0, desiredX, 0);
     }
 
-    private void CounterMovement(float x, float y, Vector2 mag) {
-        if (!grounded || jumping) return;
+    private void CheckWall() {
+        RaycastHit leftHit, rightHit;
+        bool hitRight = Physics.Raycast(transform.position, orientation.right, out rightHit, 1.2f, whatIsWallrunnable);
+        bool hitLeft = Physics.Raycast(transform.position, -orientation.right, out leftHit, 1.2f, whatIsWallrunnable);
 
-        //Slow down sliding
+        if ((hitLeft || hitRight) && !grounded) {
+            Vector3 currentWallNormal = hitRight ? rightHit.normal : leftHit.normal;
+
+            // Check if the surface normal angle is vertical enough to be a wall
+            float wallAngle = Vector3.Angle(currentWallNormal, Vector3.up);
+
+            if (wallAngle >= minWallNormalAngle && wallAngle <= 180f - minWallNormalAngle) {
+                // Check if it's the wall we just jumped off
+                if (currentWallNormal != lastWallNormal) {
+                    isWallRunning = true;
+                    wallNormal = currentWallNormal;
+                }
+            } else {
+                isWallRunning = false;
+            }
+        } else {
+            isWallRunning = false;
+        }
+    }
+
+    private void CounterMovement(float x, float y, Vector2 mag) {
+        if (!grounded || jumping || isWallRunning) return;
+
         if (crouching) {
             rb.AddForce(moveSpeed * Time.deltaTime * -rb.linearVelocity.normalized * slideCounterMovement);
             return;
         }
 
-        //Counter movement
-        if (Math.Abs(mag.x) > threshold && Math.Abs(x) < 0.05f || (mag.x < -threshold && x > 0) || (mag.x > threshold && x < 0)) {
+        if (Mathf.Abs(mag.x) > threshold && Mathf.Abs(x) < 0.05f || (mag.x < -threshold && x > 0) || (mag.x > threshold && x < 0)) {
             rb.AddForce(moveSpeed * orientation.transform.right * Time.deltaTime * -mag.x * counterMovement);
         }
-        if (Math.Abs(mag.y) > threshold && Math.Abs(y) < 0.05f || (mag.y < -threshold && y > 0) || (mag.y > threshold && y < 0)) {
+        if (Mathf.Abs(mag.y) > threshold && Mathf.Abs(y) < 0.05f || (mag.y < -threshold && y > 0) || (mag.y > threshold && y < 0)) {
             rb.AddForce(moveSpeed * orientation.transform.forward * Time.deltaTime * -mag.y * counterMovement);
         }
         
-        //Limit diagonal running. This will also cause a full stop if sliding fast and un-crouching, so not optimal.
         if (Mathf.Sqrt((Mathf.Pow(rb.linearVelocity.x, 2) + Mathf.Pow(rb.linearVelocity.z, 2))) > maxSpeed) {
             float fallspeed = rb.linearVelocity.y;
             Vector3 n = rb.linearVelocity.normalized * maxSpeed;
@@ -206,11 +276,6 @@ public class PlayerMovement : MonoBehaviour {
         }
     }
 
-    /// <summary>
-    /// Find the velocity relative to where the player is looking
-    /// Useful for vectors calculations regarding movement and limiting movement
-    /// </summary>
-    /// <returns></returns>
     public Vector2 FindVelRelativeToLook() {
         float lookAngle = orientation.transform.eulerAngles.y;
         float moveAngle = Mathf.Atan2(rb.linearVelocity.x, rb.linearVelocity.z) * Mathf.Rad2Deg;
@@ -232,27 +297,21 @@ public class PlayerMovement : MonoBehaviour {
 
     private bool cancellingGrounded;
     
-    /// <summary>
-    /// Handle ground detection
-    /// </summary>
     private void OnCollisionStay(Collision other) {
-        //Make sure we are only checking for walkable layers
         int layer = other.gameObject.layer;
         if (whatIsGround != (whatIsGround | (1 << layer))) return;
 
-        //Iterate through every collision in a physics update
         for (int i = 0; i < other.contactCount; i++) {
             Vector3 normal = other.contacts[i].normal;
-            //FLOOR
             if (IsFloor(normal)) {
                 grounded = true;
                 cancellingGrounded = false;
                 normalVector = normal;
                 CancelInvoke(nameof(StopGrounded));
+                lastWallNormal = Vector3.zero;
             }
         }
 
-        //Invoke ground/wall cancel, since we can't check normals with CollisionExit
         float delay = 3f;
         if (!cancellingGrounded) {
             cancellingGrounded = true;
@@ -263,5 +322,4 @@ public class PlayerMovement : MonoBehaviour {
     private void StopGrounded() {
         grounded = false;
     }
-    
 }
