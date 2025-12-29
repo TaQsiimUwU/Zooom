@@ -3,7 +3,7 @@ using UnityEngine;
 public class JumpPad : MonoBehaviour
 {
     [Header("Settings")]
-    public float launchForce = 15f; // How hard to throw the player
+    public float launchForce = 50f; // How hard to throw the player
     public bool resetVelocity = true; // "True" gives consistent height every time
 
     private void OnTriggerEnter(Collider other)

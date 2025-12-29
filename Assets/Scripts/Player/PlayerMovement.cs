@@ -46,7 +46,7 @@ public class PlayerMovement : MonoBehaviour {
     // Input
     [Header("Input")]
     public float x, y;
-    bool jumping, sprinting, crouching;
+    public bool jumping, sprinting, crouching;
 
     private Vector3 normalVector = Vector3.up;
 

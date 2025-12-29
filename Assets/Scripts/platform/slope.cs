@@ -64,7 +64,7 @@ public class Slope : MonoBehaviour
                 rb.AddForce(slopeDirection * downwardForce * angleMultiplier, ForceMode.Acceleration);
 
                 // Add extra gravity pull
-                rb.AddForce(Vector3.down * Physics.gravity.y * gravityMultiplier * angleMultiplier, ForceMode.Acceleration);
+                // rb.AddForce(Vector3.down * Physics.gravity.y * gravityMultiplier * angleMultiplier, ForceMode.Acceleration);
             }
         }
     }
