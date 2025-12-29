@@ -4,10 +4,19 @@ public class GrapplingGun : MonoBehaviour {
 
     private LineRenderer lr;
     private Vector3 grapplePoint;
+
+    [Header("Detection")]
     public LayerMask whatIsGrappleable;
-    public Transform gunTip, camera, player;
-    private float maxDistance = 100f;
+    public LayerMask whatIsWall;
+
+    [Header("References")]
+    public Transform gunTip, cam, player;
+
+    [Header("Settings")]
+    public float maxDistance = 100f;
     private SpringJoint joint;
+
+    [Header("Crosshair")]
     public UnityEngine.UI.Image crosshair;
     public Color normalColor = Color.white;
     public Color targetColor = Color.red;
@@ -24,14 +33,17 @@ public class GrapplingGun : MonoBehaviour {
             StopGrapple();
         }
 
+        // Combine both grappleable and wall layers for detection
+        LayerMask combinedMask = whatIsGrappleable | whatIsWall;
         RaycastHit hit;
+
         // Check if the raycast hits something
-        if (Physics.Raycast(camera.position, camera.forward, out hit, maxDistance, whatIsGrappleable)) {
+        if (Physics.Raycast(cam.position, cam.forward, out hit, maxDistance, combinedMask)) {
             crosshair.color = targetColor;
         } else {
             crosshair.color = normalColor;
         }
-        
+
     }
 
     //Called after Update
@@ -43,8 +55,11 @@ public class GrapplingGun : MonoBehaviour {
     /// Call whenever we want to start a grapple
     /// </summary>
     void StartGrapple() {
+        // Combine both grappleable and wall layers for grappling
+        LayerMask combinedMask = whatIsGrappleable | whatIsWall;
         RaycastHit hit;
-        if (Physics.Raycast(camera.position, camera.forward, out hit, maxDistance, whatIsGrappleable)) {
+
+        if (Physics.Raycast(cam.position, cam.forward, out hit, maxDistance, combinedMask)) {
             grapplePoint = hit.point;
             joint = player.gameObject.AddComponent<SpringJoint>();
             joint.autoConfigureConnectedAnchor = false;
@@ -52,7 +67,7 @@ public class GrapplingGun : MonoBehaviour {
 
             float distanceFromPoint = Vector3.Distance(player.position, grapplePoint);
 
-            //The distance grapple will try to keep from grapple point. 
+            //The distance grapple will try to keep from grapple point.
             joint.maxDistance = distanceFromPoint * 0.8f;
             joint.minDistance = distanceFromPoint * 0.25f;
 
@@ -66,7 +81,6 @@ public class GrapplingGun : MonoBehaviour {
         }
     }
 
-
     /// <summary>
     /// Call whenever we want to stop a grapple
     /// </summary>
@@ -76,13 +90,13 @@ public class GrapplingGun : MonoBehaviour {
     }
 
     private Vector3 currentGrapplePosition;
-    
+
     void DrawRope() {
         //If not grappling, don't draw rope
         if (!joint) return;
 
         currentGrapplePosition = Vector3.Lerp(currentGrapplePosition, grapplePoint, Time.deltaTime * 8f);
-        
+
         lr.SetPosition(0, gunTip.position);
         lr.SetPosition(1, currentGrapplePosition);
     }

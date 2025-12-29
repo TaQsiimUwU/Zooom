@@ -90,9 +90,7 @@ public class PlayerMovement : MonoBehaviour {
     private void StopCrouch() {
         transform.localScale = playerScale;
         transform.position = new Vector3(transform.position.x, transform.position.y + 0.5f, transform.position.z);
-    }
-
-    private void Movement() {
+    }    private void Movement() {
         if (wallRunning != null && wallRunning.isWallRunning) {
             // Wall running logic is now handled in WallRunning.cs
         } else {
@@ -110,8 +108,13 @@ public class PlayerMovement : MonoBehaviour {
         float maxS = maxSpeed;
 
         if (crouching && grounded && readyToJump) {
+            // When crouching on ground, add extra downward force and increase max speed
             rb.AddForce(Vector3.down * Time.deltaTime * 3000);
-            return;
+
+            // Don't clamp velocity as strictly when sliding - allow acceleration
+            if (rb.linearVelocity.magnitude > maxSpeed) {
+                maxS = maxSpeed * 2.5f; // Allow sliding to go faster
+            }
         }
 
         if (x > 0 && xMag > maxS) x = 0;
@@ -192,13 +195,12 @@ public class PlayerMovement : MonoBehaviour {
 
         playerCam.transform.localRotation = Quaternion.Euler(xRotation, desiredX, tilt);
         orientation.transform.localRotation = Quaternion.Euler(0, desiredX, 0);
-    }
-
-    private void CounterMovement(float x, float y, Vector2 mag) {
+    }    private void CounterMovement(float x, float y, Vector2 mag) {
         if (!grounded || jumping || (wallRunning != null && wallRunning.isWallRunning)) return;
 
         if (crouching) {
-            rb.AddForce(moveSpeed * Time.deltaTime * -rb.linearVelocity.normalized * slideCounterMovement);
+            // When crouching/sliding, use much less counter movement to allow acceleration
+            rb.AddForce(moveSpeed * Time.deltaTime * -rb.linearVelocity.normalized * slideCounterMovement * 0.3f);
             return;
         }
 

@@ -9,11 +9,12 @@ public class Slope : MonoBehaviour
     public float staticFriction = 0f;
 
     [Tooltip("How the friction of two colliding objects is combined.")]
-    public PhysicsMaterialCombine frictionCombine = PhysicsMaterialCombine.Minimum;
-
-    [Header("Force Settings")]
+    public PhysicsMaterialCombine frictionCombine = PhysicsMaterialCombine.Minimum;    [Header("Force Settings")]
     [Tooltip("Force applied to objects to pull them down the slope.")]
-    public float downwardForce = 10f;
+    public float downwardForce = 50f;
+
+    [Tooltip("Additional gravity multiplier for slopes")]
+    public float gravityMultiplier = 2.5f;
 
     private void Awake()
     {
@@ -53,8 +54,17 @@ public class Slope : MonoBehaviour
                 // Calculate the direction strictly down the slope
                 Vector3 slopeDirection = Vector3.ProjectOnPlane(Vector3.down, normal).normalized;
 
-                // Apply force
-                rb.AddForce(slopeDirection * downwardForce, ForceMode.Acceleration);
+                // Calculate slope angle
+                float slopeAngle = Vector3.Angle(Vector3.up, normal);
+
+                // Scale force based on slope angle (steeper = faster)
+                float angleMultiplier = slopeAngle / 45f; // 45 degrees = full force
+
+                // Apply force down the slope
+                rb.AddForce(slopeDirection * downwardForce * angleMultiplier, ForceMode.Acceleration);
+
+                // Add extra gravity pull
+                rb.AddForce(Vector3.down * Physics.gravity.y * gravityMultiplier * angleMultiplier, ForceMode.Acceleration);
             }
         }
     }
