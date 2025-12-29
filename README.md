@@ -179,8 +179,7 @@
 
 ## **Credits**
 
-Developed by Team Zooom as part of [Course/Project Name].
+Developed by Team Zooom .
 
-Special thanks to the Unity community and tutorial creators who inspired various mechanics.
 
 
